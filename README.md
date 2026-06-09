@@ -1,30 +1,23 @@
 # PyArtifIn
 
-**PyArtifIn** — это библиотека для Python, которая **пишет и выполняет код через ИИ**.  
-Просто описываешь задачу на русском (или английском), а нейросеть делает всё за тебя.
+PyArtifIn is a Python library that writes and executes code using AI. Just describe your task in Russian (or English), and the neural network does everything for you.
 
----
+## Installation
 
-## 🚀 Установка
-
-```bash
 pip install pyartifin
-```
 
-## 📖 Пример
+## Example
 
-```python
 import pyartifin as ai
 
 x = 10
 y = 20
 
-result = ai.run("python, x, y", "сложи x и y и верни результат")
+result = ai.run("python, x, y", "add x and y and return the result")
 
 print(result)  # 30
-```
 
-## 📜 Лицензия
+## License
 
 MIT License
 
@@ -48,6 +41,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## 👤 Автор
+## Author
 
-**tur1kay** 
+tur1kay
