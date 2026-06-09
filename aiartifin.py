@@ -1,7 +1,6 @@
-# pyartifin.py
-import os
+import sys
+from io import StringIO
 from openai import OpenAI
-from typing import Optional
 
 class PyArtifIn:
     def __init__(self, 
@@ -40,16 +39,23 @@ class PyArtifIn:
     def run(self, 
             prompt: str, 
             language: str = "python",
-            variables: dict = None) -> any:
+            variables: dict = None) -> str:
         code = self.generate(prompt, language)
         print(f"📦 Generated code:\n{code}\n{'-'*40}")
         
         if language != "python":
             return code
         
+        # Перехватываем stdout, чтобы поймать всё, что печатает код
+        old_stdout = sys.stdout
+        sys.stdout = StringIO()
+        
         exec_globals = variables or {}
         try:
             exec(code, exec_globals)
-            return exec_globals.get('result', '✅ Code executed, but result variable not found')
+            result = sys.stdout.getvalue()
+            return result if result else "✅ Код выполнен, но вывода не было"
         except Exception as e:
             return f"❌ Execution error: {e}"
+        finally:
+            sys.stdout = old_stdout
