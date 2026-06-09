@@ -10,12 +10,10 @@ pip install pyartifin
 
 import pyartifin as ai
 
-x = 10
-y = 20
+art = ai.PyArtifIn( api_key="YOUR_API_KEY",
+base_url="https://ollama.com/v1", model="gpt-oss:120b-cloud" )
 
-result = ai.run("python, x, y", "add x and y and return the result")
-
-print(result)  # 30
+result = art.run("python", "print('Hello')") print(result)
 
 ## License
 
