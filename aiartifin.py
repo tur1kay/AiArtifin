@@ -2,6 +2,7 @@ import sys
 import os
 import hashlib
 import subprocess
+import shutil
 from io import StringIO
 from functools import lru_cache
 from typing import Optional, Dict, List, Any, Union
@@ -197,14 +198,10 @@ class PyArtifIn:
         if chat_id:
             if chat_id not in self._context:
                 self._context[chat_id] = []
-            context_history = self._context[chat_id]
-            # Build full prompt with context
-            full_prompt = prompt
-            # (simplified: just use last few exchanges)
-        else:
-            full_prompt = prompt
+            # Here you would add prompt to context history
+            # For simplicity, we just use the prompt as is
         
-        code = self.generate(full_prompt, language, model=model, use_cache=use_cache)
+        code = self.generate(prompt, language, use_cache=use_cache, model=model)
         print(f"📦 Generated code:\n{code}\n{'-'*40}")
         
         if language != "python":
@@ -305,6 +302,51 @@ class PyArtifIn:
         finally:
             sys.stdout = old_stdout
     
+    def safe_run(
+        self,
+        filename: str,
+        prompt: str,
+        language: str = "python",
+        variables: Optional[Dict[str, Any]] = None,
+        max_backups: int = 5
+    ) -> str:
+        """
+        Generate code and save it to a file, creating numbered backups.
+        
+        Args:
+            filename: Name of the file to save (e.g., "script.py").
+            prompt: Task description for code generation.
+            language: Programming language.
+            variables: Variables (not used in file saving but kept for compatibility).
+            max_backups: Maximum number of backup files to keep.
+        
+        Returns:
+            Path to created file or error message.
+        """
+        code = self.generate(prompt, language)
+        
+        # Create numbered backups if file exists
+        if os.path.exists(filename):
+            # Shift existing backups: backup5 -> deleted, backup4 -> backup5, etc.
+            for i in range(max_backups - 1, 0, -1):
+                old = f"{filename}.backup{i}"
+                new = f"{filename}.backup{i+1}"
+                if os.path.exists(old):
+                    shutil.move(old, new)
+            
+            # Move current file to backup1
+            shutil.move(filename, f"{filename}.backup1")
+            print(f"📁 Backup created: {filename}.backup1")
+        
+        # Write new code
+        try:
+            with open(filename, 'w', encoding='utf-8') as f:
+                f.write(code)
+            print(f"✅ Code saved to {filename}")
+            return filename
+        except Exception as e:
+            return f"❌ Save error: {e}"
+    
     def clear_cache(self) -> None:
         """Clear the generation cache."""
         self._cache.clear()
@@ -327,6 +369,7 @@ if __name__ == "__main__":
     parser.add_argument("--model", "-m", help="Model to use")
     parser.add_argument("--api-key", help="API key (or set OLLAMA_API_KEY env)")
     parser.add_argument("--base-url", default="https://ollama.com/v1", help="API base URL")
+    parser.add_argument("--save", "-s", help="Save generated code to file (with backups)")
     
     args = parser.parse_args()
     
@@ -340,5 +383,11 @@ if __name__ == "__main__":
         model=args.model or "gpt-oss:120b-cloud"
     )
     
-    result = art.run(args.prompt, language=args.language)
-    print(result) # result
+    if args.save:
+        # Используем safe_run для сохранения в файл
+        result = art.safe_run(args.save, args.prompt, language=args.language)
+    else:
+        # Обычный run
+        result = art.run(args.prompt, language=args.language)
+    
+    print(result)
