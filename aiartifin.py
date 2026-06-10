@@ -341,4 +341,4 @@ if __name__ == "__main__":
     )
     
     result = art.run(args.prompt, language=args.language)
-    print(result)
+    print(result) # result
