@@ -5,20 +5,34 @@ PyArtifIn is a Python library that writes and executes code using AI. Just descr
 
 ## CLI
 
-pyartifin "Hello! Write Hello World in C++"
-
+pyartifin-local "Hello! Write Hello World in C++"
+pyartifin-cloud "Hello! Write Hello World in C++"
 ## Installation
 
 pip install pyartifin
 # Environment variables
-set OLLAMA_API_KEY=you_api_key_ollama_cloud # for Windows
-export OLLAMA_API_KEY=you_api_key_ollama_cloud # for linux Debian-based, RedHat-based, Arch-based (and mac)
+ Windows
+set OLLAMA_API_KEY=your_api_key_ollama_cloud
+set OLLAMA_LOCAL_URL=http://localhost:11434
+
+ Linux / Mac
+export OLLAMA_API_KEY=your_api_key_ollama_cloud
+export OLLAMA_LOCAL_URL=http://localhost:11434
 
 ## Example
 
 import pyartifin as ai
+
+ '''Cloud mode'''
 art = ai.PyArtifIn(api_key="API_KEY_OLLAMA_CLOUD")
+
 art.safe_run("myscript.py", "напиши программу для сортировки списка")
+
+
+ '''Local mode'''
+art_local = ai.PyArtifIn(local_mode=True)
+
+art_local.safe_run("myscript.py", "напиши программу для сортировки списка")
 
 ## License
 
