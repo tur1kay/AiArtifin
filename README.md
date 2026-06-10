@@ -9,11 +9,8 @@ pip install pyartifin
 ## Example
 
 import pyartifin as ai
-
-art = ai.PyArtifIn( api_key="YOUR_API_KEY",
-base_url="https://ollama.com/v1", model="gpt-oss:120b-cloud" )
-
-result = art.run("python", "print('Hello')") print(result)
+art = ai.PyArtifIn(api_key="API_KEY_OLLAMA_CLOUD")
+art.safe_run("myscript.py", "напиши программу для сортировки списка")
 
 ## License
 
