@@ -1,10 +1,18 @@
+[![PyPI version](https://badge.fury.io/py/pyartifin.svg)](https://pypi.org/project/pyartifin/)
 # PyArtifIn
 
-PyArtifIn is a Python library that writes and executes code using AI. Just describe your task in Russian (or English), and the neural network does everything for you.
+PyArtifIn is a Python library that writes and executes code using AI. Just describe your task in Russian (or our languages), and the neural network does everything for you.
+
+## CLI
+
+pyartifin "Hello! Write Hello World in C++"
 
 ## Installation
 
 pip install pyartifin
+# Environment variables
+set OLLAMA_API_KEY=you_api_key_ollama_cloud # for Windows
+export OLLAMA_API_KEY=you_api_key_ollama_cloud # for linux Debian-based, RedHat-based, Arch-based (and mac)
 
 ## Example
 
