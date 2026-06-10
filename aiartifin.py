@@ -4,6 +4,8 @@ import hashlib
 import subprocess
 import shutil
 import argparse
+import json
+import requests
 from io import StringIO
 from typing import Optional, Dict, List, Any
 
@@ -28,17 +30,24 @@ class PyArtifIn:
         self,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
-        model: str = "gpt-oss:120b-cloud",
+        model: str = "llama3.2:1b",
         fallback_models: Optional[List[str]] = None,
         local_mode: bool = False
     ):
-        # Определяем режим работы
-        if local_mode or (base_url is None and api_key is None):
-            # Локальный режим
+        self.model = model
+        self.fallback_models = fallback_models or []
+        self._cache: Dict[str, str] = {}
+        self._context: Dict[str, List[Dict[str, str]]] = {}
+        
+        if local_mode:
+            # Локальный режим — прямой Ollama API
             self.base_url = base_url or os.environ.get("OLLAMA_LOCAL_URL", "http://localhost:11434")
-            self.api_key = "ollama"  # заглушка, локальная Ollama не требует ключа
+            self.api_key = None
+            self.client_type = "ollama_local"
+            self.client = None
+            self.async_client = None
         else:
-            # Облачный режим
+            # Облачный режим — OpenAI-совместимый API
             if api_key is None:
                 api_key = os.environ.get("OLLAMA_API_KEY") or os.environ.get("OPENAI_API_KEY")
                 if api_key is None:
@@ -47,21 +56,38 @@ class PyArtifIn:
                     )
             self.base_url = base_url or "https://ollama.com/v1"
             self.api_key = api_key
-        
-        self.model = model
-        self.fallback_models = fallback_models or []
-        self._cache: Dict[str, str] = {}
-        self._context: Dict[str, List[Dict[str, str]]] = {}
-        
-        self.client = OpenAI(base_url=self.base_url, api_key=self.api_key)
-        self.async_client = AsyncOpenAI(base_url=self.base_url, api_key=self.api_key)
+            self.client_type = "openai_compatible"
+            self.client = OpenAI(base_url=self.base_url, api_key=self.api_key)
+            self.async_client = AsyncOpenAI(base_url=self.base_url, api_key=self.api_key)
     
     def _get_cache_key(self, prompt: str, language: str, temperature: float) -> str:
         content = f"{prompt}|{language}|{temperature}"
         return hashlib.md5(content.encode()).hexdigest()
     
-    def generate(self, prompt: str, language: str = "python", temperature: float = 0.3,
-                 use_cache: bool = True, model: Optional[str] = None) -> str:
+    def _call_ollama_local(self, prompt: str, model: str) -> str:
+        """Отправляет запрос к локальному Ollama через /api/generate"""
+        url = f"{self.base_url}/api/generate"
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "stream": False
+        }
+        try:
+            response = requests.post(url, json=payload, timeout=60)
+            response.raise_for_status()
+            data = response.json()
+            return data.get("response", "").strip()
+        except Exception as e:
+            raise Exception(f"Local Ollama error: {e}")
+    
+    def generate(
+        self,
+        prompt: str,
+        language: str = "python",
+        temperature: float = 0.3,
+        use_cache: bool = True,
+        model: Optional[str] = None
+    ) -> str:
         cache_key = self._get_cache_key(prompt, language, temperature)
         if use_cache and cache_key in self._cache:
             return self._cache[cache_key]
@@ -71,32 +97,51 @@ class PyArtifIn:
         Do not write any explanations, do not use ```python ... ```, only pure code.
         The code must be working and safe.
         """
+        full_prompt = f"{system_prompt}\n\nUser: {prompt}\n\nCode:"
         
         models_to_try = [model or self.model] + self.fallback_models
         last_error = None
-        for current_model in models_to_try:
-            try:
-                response = self.client.chat.completions.create(
-                    model=current_model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=temperature
-                )
-                code = response.choices[0].message.content.strip()
-                if use_cache:
-                    self._cache[cache_key] = code
-                return code
-            except Exception as e:
-                last_error = e
-                print(f"⚠️ Model {current_model} failed: {e}")
-                continue
         
-        raise last_error or Exception("No model available to generate code")
+        if self.client_type == "ollama_local":
+            for current_model in models_to_try:
+                try:
+                    code = self._call_ollama_local(full_prompt, current_model)
+                    if use_cache:
+                        self._cache[cache_key] = code
+                    return code
+                except Exception as e:
+                    last_error = e
+                    print(f"⚠️ Model {current_model} failed: {e}")
+                    continue
+            raise last_error or Exception("No model available to generate code")
+        
+        else:  # openai_compatible
+            for current_model in models_to_try:
+                try:
+                    response = self.client.chat.completions.create(
+                        model=current_model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=temperature
+                    )
+                    code = response.choices[0].message.content.strip()
+                    if use_cache:
+                        self._cache[cache_key] = code
+                    return code
+                except Exception as e:
+                    last_error = e
+                    print(f"⚠️ Model {current_model} failed: {e}")
+                    continue
+            raise last_error or Exception("No model available to generate code")
     
     async def agenerate(self, prompt: str, language: str = "python", temperature: float = 0.3,
                         model: Optional[str] = None) -> str:
+        # Асинхронная версия пока не реализована для локального режима
+        if self.client_type == "ollama_local":
+            return self.generate(prompt, language, temperature, use_cache=True, model=model)
+        
         cache_key = self._get_cache_key(prompt, language, temperature)
         if cache_key in self._cache:
             return self._cache[cache_key]
@@ -161,6 +206,9 @@ class PyArtifIn:
     
     async def arun(self, prompt: str, language: str = "python", variables: Optional[Dict[str, Any]] = None,
                    chat_id: Optional[str] = None, model: Optional[str] = None) -> str:
+        if self.client_type == "ollama_local":
+            return self.run(prompt, language, variables, chat_id, model=model)
+        
         code = await self.agenerate(prompt, language, model=model)
         print(f"📦 Generated code:\n{code}\n{'-'*40}")
         
@@ -230,7 +278,7 @@ def parse_args():
     )
     parser.add_argument("prompt", help="Task description in natural language")
     parser.add_argument("--lang", "-l", default="python", help="Programming language")
-    parser.add_argument("--model", "-m", default="gpt-oss:120b-cloud", help="Model to use")
+    parser.add_argument("--model", "-m", default="llama3.2:1b", help="Model to use")
     parser.add_argument("--save", "-s", metavar="FILENAME", help="Save code to file (with backups)")
     parser.add_argument("--api-key", help="API key (or set OLLAMA_API_KEY)")
     parser.add_argument("--base-url", help="Base URL for API")
@@ -243,14 +291,19 @@ def main_cloud():
     art = PyArtifIn(
         api_key=args.api_key,
         base_url=args.base_url,
-        model=args.model
+        model=args.model,
+        local_mode=False
     )
     _run_cli(art, args)
 
 
 def main_local():
     args = parse_args()
-    art = PyArtifIn(local_mode=True, model=args.model)
+    art = PyArtifIn(
+        base_url=args.base_url,
+        model=args.model,
+        local_mode=True
+    )
     _run_cli(art, args)
 
 
@@ -264,7 +317,6 @@ def _run_cli(art: PyArtifIn, args):
 
 
 if __name__ == "__main__":
-    # Определяем режим по имени команды
     script_name = os.path.basename(sys.argv[0])
     if "local" in script_name:
         main_local()
